@@ -48,12 +48,7 @@ The **AI Meal Planner** is a smart dietary planning application that creates per
 
 ---
 
-<<<<<<< HEAD
-## 🚀 How to Run the App
-```
-=======
 🚀 How to Run the App
->>>>>>> de98273 (Updated README with run instructions and project structure)
 Install dependencies
 nginx
 Copy
@@ -84,7 +79,7 @@ AI-Meal-Planner/
 └── .streamlit/
     └── secrets.toml
 ---
-<<<<<<< HEAD
+
 ```
 ## 👨‍💻 Author
 Made with ❤️ by Samarth Shekhar
@@ -93,11 +88,4 @@ https://github.com/Samarth-Shekhar
 LinkedIn 
 www.linkedin.com/in/samarth-shekhar-185ba311a
 ---
-=======
 
-👨‍💻 Author
-Made with ❤️ by Samarth Shekhar 
-GitHub https://github.com/Samarth-Shekhar 
-LinkedIn www.linkedin.com/in/samarth-shekhar-185ba311a
-
->>>>>>> de98273 (Updated README with run instructions and project structure)
