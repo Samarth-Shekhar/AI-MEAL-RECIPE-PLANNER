@@ -37,7 +37,7 @@ The **AI Meal Planner** is a smart dietary planning application that creates per
 - **Groq API** – AI-generated meal names & descriptions
 - **Knapsack Algorithm** – Optimized food item selection
 
-🚀 How to Run the App
+## 🚀 How to Run the App
 Install dependencies
 pip install -r requirements.txt
 Add your Groq API key
