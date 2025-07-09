@@ -18,7 +18,6 @@ The **AI Meal Planner** is a smart dietary planning application that creates per
 ### 📄 PDF Export  
 ![Image](https://github.com/user-attachments/assets/4e427504-005f-4ad7-b32e-0d56f4bbb4dd)
 
----
 
 ## 🔥 Features
 
@@ -29,8 +28,6 @@ The **AI Meal Planner** is a smart dietary planning application that creates per
 - 📄 Export full meal plan as a downloadable PDF
 - 🧪 Streamlit-based interactive UI
 
----
-
 ## 🛠️ Tech Stack
 
 - **Python**
@@ -39,8 +36,6 @@ The **AI Meal Planner** is a smart dietary planning application that creates per
 - **FPDF** – PDF export
 - **Groq API** – AI-generated meal names & descriptions
 - **Knapsack Algorithm** – Optimized food item selection
-
----
 
 🚀 How to Run the App
 Install dependencies
@@ -54,7 +49,6 @@ GROQ_API_KEY = "your_api_key"
 Run the app
 streamlit run streamlit_meal_planner.py
 
-``
 ## 📁 Project Structure
 ```
 AI-Meal-Planner/
@@ -67,8 +61,6 @@ AI-Meal-Planner/
 └── .streamlit/
     └── secrets.toml
 
----
-
 ```
 ## 👨‍💻 Author
 
@@ -78,5 +70,5 @@ https://github.com/Samarth-Shekhar
 LinkedIn 
 www.linkedin.com/in/samarth-shekhar-185ba311a
 ```
----
+
 
