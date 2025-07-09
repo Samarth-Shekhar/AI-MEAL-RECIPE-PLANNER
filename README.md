@@ -54,7 +54,7 @@ GROQ_API_KEY = "your_api_key"
 Run the app
 streamlit run streamlit_meal_planner.py
 
-```
+``
 ## 📁 Project Structure
 ```
 AI-Meal-Planner/
@@ -69,7 +69,7 @@ AI-Meal-Planner/
 
 ---
 
-``
+```
 ## 👨‍💻 Author
 
 Made with ❤️ by Samarth Shekhar
