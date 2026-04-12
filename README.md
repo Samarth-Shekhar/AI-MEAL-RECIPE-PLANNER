@@ -1,73 +1,72 @@
-# 🧠 AI Meal Planner App 🍽️
+<div align="center">
+  <img src="https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white" />
+  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/Groq-000000?style=for-the-badge&logo=groq&logoColor=white" />
+  <img src="https://img.shields.io/badge/Plotly-239120?style=for-the-badge&logo=plotly&logoColor=white" />
+</div>
 
-The **AI Meal Planner** is a smart dietary planning application that creates personalized meal plans based on your age, weight, gender, and dietary preference (vegan, vegetarian, non-vegetarian). It calculates your BMR, optimizes meals using the knapsack algorithm, and generates creative descriptions using **LLaMA 3 (Groq API)**.
+<h1 align="center">🥗 NutriAI - Personal AI Meal Planner & Recipe Generator</h1>
+
+<p align="center">
+  A premium, beautifully designed, all-in-one dietary dashboard that leverages advanced algorithms and the blazing-fast Groq Llama-3 API to instantly calculate your body metrics, optimize macronutrients, and generate authentic recipes.
+</p>
 
 ---
 
-## 📸 Demo
+## ✨ Key Features
 
-### 🏠 Home Page  
-![Image](https://github.com/user-attachments/assets/3d2d891e-3dc6-4b78-b586-66421f3b4d37)
+- **Single-Page Glassmorphism UI:** A sleek, fully responsive and dynamic web dashboard. Includes a built-in Dark/Light mode toggle with breathtaking ambient gradients.
+- **Live Body Analysis:** Input your physical metrics and lifestyle, and the dashboard instantly visualizes your health status on a dynamic Plotly BMI Gauge. Features completely live statistics including BMR, TDEE, exact Calorie Targets, and a calculated Protein Target (in grams).
+- **Fast-Track Parallel AI Generation:** Waits of the past are over. Using Python multithreading, NutriAI crafts all three daily meals (Breakfast, Lunch, and Dinner), generating immersive AI descriptions and authentic recipes concurrently—reducing generation time to less than 5 seconds.
+- **Advanced Knapsack Optimization:** Uses a dynamic programming approach (the Knapsack algorithm) behind the scenes to accurately hit your calorie macros utilizing our curated nutritional database.
+- **Master PDF Export:** Instantly download a comprehensive, beautifully formatted PDF of your exact BMI details, daily meal structure, and full recipes for offline viewing (complete with safe UTF sanitization).
 
-### 🧠 Meal Suggestions  
-![Image](https://github.com/user-attachments/assets/bf242436-46ab-41c6-a5a2-75a523693a9f)
+## 🪟 Interface Preview
 
-### 📝 Generated Meal Plan  
-![Image](https://github.com/user-attachments/assets/b84d075f-d52e-4b52-8a21-799aecaa1391)
+Our dashboard boasts a stunning interface powered solely by custom Streamlit CSS injection:
+- Real-time Plotly Indicator Dashboard.
+- Smooth, translucent frosted-glass floating cards.
+- Complete 1-Page flow (No page refreshes or hidden components).
 
-### 📄 PDF Export  
-![Image](https://github.com/user-attachments/assets/4e427504-005f-4ad7-b32e-0d56f4bbb4dd)
+## ⚙️ Installation & Usage
 
+### 1. Prerequisites
+Ensure you have **Python 3.10+** installed on your system.
 
-## 🔥 Features
+### 2. Clone the Repository
+```bash
+git clone https://github.com/Samarth-Shekhar/AI-MEAL-RECIPE-PLANNER.git
+cd AI-MEAL-RECIPE-PLANNER
+```
 
-- 🔢 BMR (Calorie) calculation based on user profile
-- 🥦 Choose your diet: **Vegan**, **Vegetarian**, or **Non-Vegetarian**
-- 📦 Meal optimization using **Knapsack algorithm**
-- 🧠 AI-generated meal names and descriptions via **Groq’s LLaMA-3**
-- 📄 Export full meal plan as a downloadable PDF
-- 🧪 Streamlit-based interactive UI
-
-## 🛠️ Tech Stack
-
-- **Python**
-- **Streamlit** – UI & interactivity
-- **Pandas** – Data manipulation
-- **FPDF** – PDF export
-- **Groq API** – AI-generated meal names & descriptions
-- **Knapsack Algorithm** – Optimized food item selection
-
-## 🚀 How to Run the App
-Install dependencies
+### 3. Install Dependencies
+Install all required packages from `requirements.txt`:
+```bash
 pip install -r requirements.txt
-Add your Groq API key
-Create a file .streamlit/secrets.toml and add:
+```
+*(Core dependencies: `streamlit`, `plotly`, `requests`, `fpdf`)*
 
-Add your Groq API key
-Create a file .streamlit/secrets.toml and add:
-GROQ_API_KEY = "your_api_key"
-Run the app
+### 4. API Keys Configuration
+This project relies on the **Groq API** for ultra-fast Llama-3 recipe generation.
+Create a `.streamlit` folder in the root directory and add a `secrets.toml` file:
+
+```toml
+# .streamlit/secrets.toml
+GROQ_API_KEY = "gsk_YourAPIKeyGoesHere"
+```
+
+### 5. Run the Application
+```bash
 streamlit run streamlit_meal_planner.py
-
-## 📁 Project Structure
 ```
-AI-Meal-Planner/
-├── data.py                  # Meal item data
-├── knapsack.py              # Knapsack logic
-├── pdf_exporter.py          # PDF export functionality
-├── streamlit_meal_planner.py # Main Streamlit app
-├── requirements.txt
-├── README.md
-└── .streamlit/
-    └── secrets.toml
+Open your browser to `http://localhost:8501`.
 
-```
-## 👨‍💻 Author
+## 🧠 Project Architecture
+- **`streamlit_meal_planner.py`:** The main engine running the UI, CSS, Knapsack algorithm, multithreading, and Plotly graphics.
+- **`recipe_generator.py`:** Pre-built deterministic authentic recipe formulations.
+- **`prompts.py`:** Tuned LLM templates requesting dietary rationale and flavor profiles.
+- **`data.py`:** Core nutritional database mapping containing macro/calorie counts for various diets (Vegan/Vegetarian/Non-Vegetarian).
+- **`pdf_exporter.py`:** Dynamic FPDF generation engine parsing emojis and UTF characters safely into a downloadable plan.
 
-Made with ❤️ by Samarth Shekhar
-GitHub
-https://github.com/Samarth-Shekhar 
-LinkedIn 
-www.linkedin.com/in/samarth-shekhar-185ba311a
-
-
+---
+**Created by [Samarth Shekhar](https://github.com/Samarth-Shekhar)**
