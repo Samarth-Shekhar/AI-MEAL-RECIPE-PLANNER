@@ -1,250 +1,314 @@
 import streamlit as st
-import pandas as pd
 import requests
 import random
+import time
 import urllib3
+import concurrent.futures
+import plotly.graph_objects as go
 from pdf_exporter import create_meal_plan_pdf
 
-from data import (
-    food_items_breakfast,
-    food_items_lunch,
-    food_items_dinner
-)
+from data import food_items_breakfast, food_items_lunch, food_items_dinner
 from prompts import (
     pre_prompt_b, pre_prompt_l, pre_prompt_d,
-    pre_breakfast, pre_lunch, pre_dinner,
-    end_text, example_response_l, example_response_d, negative_prompt
+    pre_breakfast, pre_lunch, pre_dinner, negative_prompt
 )
 from recipe_generator import (
-    generate_breakfast_recipe,
-    generate_lunch_recipe,
-    generate_dinner_recipe
+    generate_breakfast_recipe, generate_lunch_recipe, generate_dinner_recipe
 )
 
-# Constants
-UNITS_CM_TO_IN = 0.393701
-UNITS_KG_TO_LB = 2.20462
-UNITS_LB_TO_KG = 1 / UNITS_KG_TO_LB
-UNITS_IN_TO_CM = 1 / UNITS_CM_TO_IN
-
+# ─── Constants ────────────────────────────────────────────────────────────────
+UNITS_LB_TO_KG = 1 / 2.20462
+UNITS_IN_TO_CM = 1 / 0.393701
+GROQ_API_URL   = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL     = "llama-3.3-70b-versatile"
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Groq API
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-HEADERS = {
-    "Authorization": f"Bearer {st.secrets['GROQ_API_KEY']}",
-    "Content-Type": "application/json"
-}
+# ─── Page Config ──────────────────────────────────────────────────────────────
+st.set_page_config(page_title="AI Meal Planner", page_icon="🥗", layout="wide", initial_sidebar_state="collapsed")
 
-# Page Setup
-st.set_page_config(page_title="AI - Meal Planner", page_icon="🍴")
-st.title("🍴 AI Meal Planner with Recipes & Descriptions")
-st.divider()
-st.markdown("*Powered by Groq (LLaMA-3)*")
-st.divider()
+# ─── Session State ────────────────────────────────────────────────────────────
+for k, v in {"dark_mode": True, "generated_data": None, "last_name": ""}.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-# User Input
-st.subheader("👤 Your Information:")
-name = st.text_input("Enter your name")
-age = st.number_input("Enter your age", step=1)
+dm = st.session_state.dark_mode
 
-unit_preference = st.radio("Preferred units:", ["Metric (kg, cm)", "Imperial (lb, ft + in)"])
-if unit_preference == "Metric (kg, cm)":
-    weight = st.number_input("Enter your weight (kg)")
-    height = st.number_input("Enter your height (cm)")
+# ════════════════════════════════════════════════════════════════════════════
+# THEME TOKENS
+# ════════════════════════════════════════════════════════════════════════════
+if dm:
+    BG         = "#050514"
+    SURFACE    = "rgba(15, 23, 42, 0.45)"
+    BORDER     = "rgba(255, 255, 255, 0.08)"
+    TEXT_MAIN  = "#F8FAFC"
+    TEXT_MUTED = "#94A3B8"
+    INPUT_BG   = "rgba(0, 0, 0, 0.2)" # Fixed opaque issue
+    RADIALS    = """
+      radial-gradient(circle at 15% 15%, rgba(139,92,246,0.1) 0%, transparent 40%),
+      radial-gradient(circle at 85% 20%, rgba(6,182,212,0.1) 0%, transparent 40%),
+      radial-gradient(circle at 50% 80%, rgba(236,72,153,0.1) 0%, transparent 40%)
+    """
+    BTN_TEXT   = "☀️  Light Mode"
 else:
-    weight_lb = st.number_input("Enter your weight (lb)")
-    col1, col2 = st.columns(2)
-    with col1:
-        height_ft = st.number_input("Enter your height (ft)")
-    with col2:
-        height_in = st.number_input("Enter your height (in)")
-    weight = weight_lb * UNITS_LB_TO_KG
-    height = (height_ft * 12 + height_in) * UNITS_IN_TO_CM
+    BG         = "#E6EBF5"
+    SURFACE    = "rgba(255, 255, 255, 0.6)"
+    BORDER     = "rgba(109, 40, 217, 0.22)"
+    TEXT_MAIN  = "#1A0D3D"
+    TEXT_MUTED = "#3B2D7A"
+    INPUT_BG   = "rgba(255, 255, 255, 0.85)"
+    RADIALS    = "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.8) 0%, transparent 100%)"
+    BTN_TEXT   = "🌙  Dark Mode"
 
-gender = st.radio("Gender:", ["Male", "Female"])
-diet = st.selectbox("Diet Preference", ["Vegan", "Vegetarian", "Non-Vegetarian"])
+PURPLE = "#8B5CF6"
+CYAN   = "#06B6D4"
+PINK   = "#EC4899"
 
-# BMR Calculation
-def calculate_bmr(weight, height, age, gender):
-    if gender == "Male":
-        return 9.99 * weight + 6.25 * height - 4.92 * age + 5
-    else:
-        return 9.99 * weight + 6.25 * height - 4.92 * age - 161
+# ════════════════════════════════════════════════════════════════════════════
+# CORE UI CSS
+# ════════════════════════════════════════════════════════════════════════════
+st.markdown(f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-bmr = calculate_bmr(weight, height, age, gender)
-round_bmr = round(bmr, 2)
-st.subheader(f"🍽️ Your Daily Requirement: **{round_bmr} Calories**")
+*,*::before,*::after{{box-sizing:border-box;}}
+html,body,.stApp{{
+  background-color:{BG}!important;
+  background-image:{RADIALS}!important;
+  font-family:'Space Grotesk',sans-serif!important;
+  color:{TEXT_MAIN}!important;
+}}
 
-# Diet Mapping
-diet_map = {
-    "Vegan": ["vegan"],
-    "Vegetarian": ["vegan", "vegetarian"],
-    "Non-Vegetarian": ["vegan", "vegetarian", "non-vegetarian"]
-}
+#MainMenu,footer,header,.stDeployButton,[data-testid="stToolbar"],[data-testid="stDecoration"]{{
+  display:none!important;visibility:hidden!important;
+}}
 
-# Filter food items by diet
-def filter_diet(food_data, allowed_types):
-    return {
-        group: {
-            item: info for item, info in foods.items()
-            if info.get("type", "non-vegetarian") in allowed_types
-        }
-        for group, foods in food_data.items()
-    }
+.main .block-container{{ padding:2rem 3rem 6rem!important; max-width:1440px!important; margin:0 auto; }}
 
-# Flatten for calories
-def flatten_food_groups(food_groups):
-    return {
-        group: {
-            item: info["calories"] for item, info in foods.items()
-        } for group, foods in food_groups.items()
-    }
+/* Universal Inputs */
+div[data-testid="stNumberInput"] input,
+div[data-testid="stTextInput"] input,
+div[data-testid="stSelectbox"] > div > div {{
+  background:{INPUT_BG}!important; border:1px solid {BORDER}!important;
+  border-radius:12px!important; color:{TEXT_MAIN}!important; font-weight:500!important;
+}}
 
-# Knapsack calorie optimizer
-def knapsack(target_calories, food_groups):
-    items = [(cal, item) for group in food_groups.values() for item, cal in group.items()]
-    n = len(items)
-    if n == 0:
-        return [], 0
-    dp = [[0] * (target_calories + 1) for _ in range(n + 1)]
-    for i in range(1, n + 1):
-        for j in range(target_calories + 1):
-            cal, _ = items[i - 1]
-            if cal > j:
-                dp[i][j] = dp[i - 1][j]
-            else:
-                dp[i][j] = max(dp[i - 1][j], dp[i - 1][j - cal] + cal)
-    selected_items = []
-    j = target_calories
-    for i in range(n, 0, -1):
-        if dp[i][j] != dp[i - 1][j]:
-            cal, item = items[i - 1]
-            selected_items.append(item)
-            j -= cal
-    return selected_items, dp[n][target_calories]
+/* Fix text colors */
+p, span, div, label {{ color: {TEXT_MAIN}; }}
+label[data-testid="stWidgetLabel"] p, div[data-testid="stRadio"] label p {{ color:{TEXT_MUTED}!important; font-weight:600!important; }}
 
-# LLM description generator
-def generate_meal_description(meal_items, pre_prompt, pre_meal):
-    content = pre_prompt + str(meal_items) + pre_meal + negative_prompt
-    response = requests.post(
-        GROQ_API_URL,
-        headers=HEADERS,
-        json={"model": "llama3-70b-8192", "messages": [{"role": "user", "content": content}]},
-        verify=False
-    )
+/* Primary Generated Button */
+.stButton>button {{
+  width:100%; padding:1rem!important; border-radius:12px!important;
+  font-family:'Space Grotesk',sans-serif!important; font-size:1.1rem!important; font-weight:700!important;
+  background:linear-gradient(135deg, {PURPLE}, {CYAN})!important; color:#FFFFFF!important; border:none!important;
+}}
+.stButton>button:hover {{ box-shadow:0 8px 30px rgba(139,92,246,0.4)!important; }}
+</style>
+""", unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════════════════════
+# LOGIC & HELPERS
+# ════════════════════════════════════════════════════════════════════════════
+def dash_title(title, subtitle):
+    st.markdown(f"""
+    <div style="text-align:center;margin-bottom:3rem">
+      <div style="display:inline-flex;align-items:center;padding:6px 16px;border-radius:100px;
+        background:{SURFACE};border:1px solid {BORDER};font-size:0.8rem;font-weight:700;
+        letter-spacing:1px;color:{TEXT_MAIN};margin-bottom:1rem">
+        <span style="color:{PURPLE};margin-right:8px">●</span> AI-POWERED • GROQ LLAMA 3.3
+      </div>
+      <h1 style="font-size:clamp(2.5rem, 5vw, 4rem);font-weight:800;line-height:1.1;margin:0 0 1rem 0;color:{TEXT_MAIN}">{title}</h1>
+      <p style="font-size:1.1rem;color:{TEXT_MUTED};max-width:600px;margin:0 auto;line-height:1.5">{subtitle}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+def calc_bmi(w,h): return round(w/(h/100)**2,1) if h>0 else 0.0
+def calc_bmr(w,h,a,g): b=9.99*w+6.25*h-4.92*a; return b+5 if g=="Male" else b-161
+def bmi_cat(b):
+    if b<18.5: return "Underweight", "#3B82F6"
+    if b<25.0: return "Normal Weight", "#10B981"
+    if b<30.0: return "Overweight", "#F59E0B"
+    return "Obese", "#EF4444"
+
+DIET_MAP={"Vegan":["vegan"],"Vegetarian":["vegan","vegetarian"],"Non-Vegetarian":["vegan","vegetarian","non-vegetarian"]}
+def filter_diet(fd,al): return {g:{i:info for i,info in fs.items() if info.get("type","non-vegetarian") in al} for g,fs in fd.items()}
+def flatten(fg): return {g:{i:info["calories"] for i,info in fs.items()} for g,fs in fg.items()}
+def knapsack(target,groups):
+    items=[(c,i) for g in groups.values() for i,c in g.items()]
+    n=len(items)
+    if n==0: return [],0
+    dp=[[0]*(target+1) for _ in range(n+1)]
+    for i in range(1,n+1):
+        for j in range(target+1):
+            c,_=items[i-1]
+            dp[i][j]=dp[i-1][j] if c>j else max(dp[i-1][j],dp[i-1][j-c]+c)
+    sel,j=[],target
+    for i in range(n,0,-1):
+        if dp[i][j]!=dp[i-1][j]:
+            c,itm=items[i-1];sel.append(itm);j-=c
+    return sel,dp[n][target]
+
+def call_llm(content):
     try:
-        return response.json()["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"❌ LLM Error: {response.json().get('error', {}).get('message', str(e))}"
+        h={"Authorization":f"Bearer {st.secrets['GROQ_API_KEY']}","Content-Type":"application/json"}
+        r=requests.post(GROQ_API_URL,headers=h,
+            json={"model":GROQ_MODEL,"messages":[{"role":"user","content":content}],"max_tokens":250},
+            verify=False,timeout=20)
+        return r.json()["choices"][0]["message"]["content"]
+    except Exception as e: return f"AI Unavailable: {e}"
 
-# Trigger Button
-if 'clicked' not in st.session_state:
-    st.session_state.clicked = False
+def gen_desc(items,pp,pm): return call_llm(pp+str(items)+pm+negative_prompt)
 
-def click_button():
-    st.session_state.clicked = True
+def draw_bmi_gauge(bmi):
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number", value=bmi, number={'suffix': " kg/m²", 'font': {'size': 40, 'color': TEXT_MAIN, 'family': 'Space Grotesk'}},
+        gauge={
+            'axis': {'range': [10, 40], 'tickwidth': 1, 'tickcolor': TEXT_MUTED},
+            'bar': {'color': TEXT_MAIN, 'thickness': 0.15},
+            'bgcolor': "rgba(0,0,0,0)", 'borderwidth': 0,
+            'steps': [
+                {'range': [10, 18.5], 'color': 'rgba(59, 130, 246, 0.4)'},
+                {'range': [18.5, 25], 'color': '#10B981'},
+                {'range': [25, 30], 'color': 'rgba(245, 158, 11, 0.4)'},
+                {'range': [30, 40], 'color': 'rgba(239, 68, 68, 0.4)'}
+            ]
+        }))
+    fig.update_layout(height=250, margin=dict(l=20,r=20,t=40,b=20), paper_bgcolor='rgba(0,0,0,0)', font={'color': TEXT_MAIN})
+    return fig
 
-st.button("Create Meal Basket", on_click=click_button)
+# ════════════════════════════════════════════════════════════════════════════
+# HEADER & TOGGLE
+# ════════════════════════════════════════════════════════════════════════════
+col_logo, col_theme = st.columns([5,1])
+with col_logo:
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem">
+      <div style="background:linear-gradient(135deg,{PURPLE},{CYAN});border-radius:12px;padding:8px;font-size:1.5rem">🥗</div>
+      <span style="font-size:1.4rem;font-weight:700;color:{TEXT_MAIN}">NutriAI</span>
+    </div>
+    """, unsafe_allow_html=True)
+with col_theme:
+    if st.button(BTN_TEXT):
+        st.session_state.dark_mode = not st.session_state.dark_mode
+        st.rerun()
 
-# If clicked, generate meals
-if st.session_state.clicked:
-    calories_breakfast = round(bmr * 0.5)
-    calories_lunch = round(bmr * 1/3)
-    calories_dinner = round(bmr * 1/6)
+# ════════════════════════════════════════════════════════════════════════════
+# ALL-IN-ONE PAGE LAYOUT
+# ════════════════════════════════════════════════════════════════════════════
+dash_title("YOUR PERSONAL AI MEAL PLANNER", "One page. Zero waiting. Enter your details and generate everything instantly.")
 
-    allowed_types = diet_map[diet]
+# --- TOP SECTION: INPUTS & BMI GAUGE ---
+col_form, col_gauge = st.columns([1,1], gap="large")
 
-    b_items = filter_diet(food_items_breakfast, allowed_types)
-    l_items = filter_diet(food_items_lunch, allowed_types)
-    d_items = filter_diet(food_items_dinner, allowed_types)
+with col_form:
+    st.markdown(f'<div style="font-size:1.2rem;font-weight:700;color:{TEXT_MAIN};margin-bottom:1rem;border-bottom:1px solid {BORDER};padding-bottom:10px">👤 Personal Profile</div>', unsafe_allow_html=True)
+    name   = st.text_input("Full Name", value=st.session_state.last_name, placeholder="e.g. Samarth Shekhar")
+    age    = st.number_input("Age (years)", 10, 100, 25)
+    
+    c1, c2 = st.columns(2)
+    with c1: gender = st.radio("Gender", ["Male", "Female"], horizontal=True)
+    with c2: diet   = st.selectbox("Diet Type", ["Non-Vegetarian", "Vegetarian", "Vegan"])
+    
+    act_map = {
+        "Sedentary (0 days/wk)": 1.2, 
+        "Light (1-3 days/wk)": 1.375, 
+        "Moderate (3-5 days/wk)": 1.55, 
+        "Active (6-7 days/wk)": 1.725
+    }
+    act_lbl = st.selectbox("Activity Level", list(act_map.keys()), index=1)
+    gl_map  = {"Maintain Weight":0, "Lose Weight":-500, "Gain Weight":+500}
+    gl_lbl  = st.selectbox("Calorie Goal", list(gl_map.keys()))
 
-    b_items_flat = flatten_food_groups(b_items)
-    l_items_flat = flatten_food_groups(l_items)
-    d_items_flat = flatten_food_groups(d_items)
+    c3, c4 = st.columns(2)
+    with c3: w = st.number_input("Weight (kg)", 20.0, 300.0, 70.0)
+    with c4: h = st.number_input("Height (cm)", 100.0, 250.0, 170.0)
 
-    meal_items_morning, cal_m = knapsack(calories_breakfast, b_items_flat)
-    meal_items_lunch, cal_l = knapsack(calories_lunch, l_items_flat)
-    meal_items_dinner, cal_d = knapsack(calories_dinner, d_items_flat)
+# Calculate live stats
+bmi = calc_bmi(w, h)
+cat, cat_col = bmi_cat(bmi)
+bmr = calc_bmr(w, h, age, gender)
+tdee= bmr * act_map[act_lbl]
+tgt = max(1200, round(tdee + gl_map[gl_lbl]))
 
-    st.header("📦 Meal Basket")
-    col1, col2, col3 = st.columns(3)
+with col_gauge:
+    st.markdown(f'<div style="font-size:1.2rem;font-weight:700;color:{TEXT_MAIN};margin-bottom:1rem;border-bottom:1px solid {BORDER};padding-bottom:10px">📊 Live Body Analysis</div>', unsafe_allow_html=True)
+    st.plotly_chart(draw_bmi_gauge(bmi), use_container_width=True, config={'displayModeBar':False})
+    st.markdown(f'<div style="text-align:center;font-size:1.2rem;font-weight:700;color:{cat_col};margin-top:-20px">{"✅" if cat=="Normal Weight" else "⚠️"} {cat}</div>', unsafe_allow_html=True)
+    
+    # Quick Stats Row
+    protein_tgt = round((tgt * 0.30) / 4)
+    c1, c2, c3, c4, c5 = st.columns(5)
+    
+    labels = ["BMI", "BMR", "TDEE", "CALORIES", "PROTEIN"]
+    values = [bmi, round(bmr), round(tdee), tgt, f"{protein_tgt}g"]
+    colors = ["#10B981", "#A855F7", "#06B6D4", "#10B981", "#EC4899"]
+    
+    for col, lbl, val, colr in zip([c1,c2,c3,c4,c5], labels, values, colors):
+        with col:
+            st.markdown(f'<div style="background:{SURFACE};border:1px solid {BORDER};border-radius:12px;padding:10px 5px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:{colr};line-height:1">{val}</div><div style="font-size:0.65rem;font-weight:700;color:{TEXT_MUTED};letter-spacing:1px">{lbl}</div></div>', unsafe_allow_html=True)
 
-    with col1:
-        st.write(f"Calories: {calories_breakfast}")
-        st.dataframe(pd.DataFrame({"Breakfast Items": meal_items_morning}))
-        st.write(f"Total: {cal_m}")
+st.markdown("<br><hr>", unsafe_allow_html=True)
 
-    with col2:
-        st.write(f"Calories: {calories_lunch}")
-        st.dataframe(pd.DataFrame({"Lunch Items": meal_items_lunch}))
-        st.write(f"Total: {cal_l}")
-
-    with col3:
-        st.write(f"Calories: {calories_dinner}")
-        st.dataframe(pd.DataFrame({"Dinner Items": meal_items_dinner}))
-        st.write(f"Total: {cal_d}")
-
-    if st.button("Generate Recipes and Descriptions"):
-        breakfast_recipe = generate_breakfast_recipe(b_items)
-        lunch_recipe = generate_lunch_recipe(l_items)
-        dinner_recipe = generate_dinner_recipe(d_items)
-
-        desc_b = generate_meal_description(meal_items_morning, pre_prompt_b, pre_breakfast)
-        desc_l = generate_meal_description(meal_items_lunch, pre_prompt_l, pre_lunch)
-        desc_d = generate_meal_description(meal_items_dinner, pre_prompt_d, pre_dinner)
-
-        for title, recipe, desc in zip(["Breakfast", "Lunch", "Dinner"],
-                                       [breakfast_recipe, lunch_recipe, dinner_recipe],
-                                       [desc_b, desc_l, desc_d]):
-            st.markdown(f"## 🍱 {title}")
-            st.markdown("### 📖 AI Description")
-            st.write(desc)
-            st.markdown("### 🧑‍🍳 Recipe Instructions")
-            st.json(recipe)
-
-        # Build meal data list
-        meals_data = [
-            {
-                "title": "Breakfast",
-                "calories": calories_breakfast,
-                "items": meal_items_morning,
-                "description": desc_b,
-                "recipe": breakfast_recipe
-            },
-            {
-                "title": "Lunch",
-                "calories": calories_lunch,
-                "items": meal_items_lunch,
-                "description": desc_l,
-                "recipe": lunch_recipe
-            },
-            {
-                "title": "Dinner",
-                "calories": calories_dinner,
-                "items": meal_items_dinner,
-                "description": desc_d,
-                "recipe": dinner_recipe
-            },
+# --- MIDDLE SECTION: GENERATION ---
+_, c_btn, _ = st.columns([1,2,1])
+with c_btn:
+    if st.button("🚀 Fast-Track Generation (Plan + AI Recipes)"):
+        st.session_state.last_name = name.strip() or "User"
+        
+        # Knapsack
+        cb,cl,cd = round(tgt*.35),round(tgt*.40),round(tgt*.25)
+        al = DIET_MAP[diet]
+        bi = filter_diet(food_items_breakfast,al)
+        li = filter_diet(food_items_lunch,al)
+        di = filter_diet(food_items_dinner,al)
+        ib,cb_=knapsack(cb,flatten(bi)); il,cl_=knapsack(cl,flatten(li)); id_,cd_=knapsack(cd,flatten(di))
+        
+        # Parallel Execution for Extreme Speed
+        with st.spinner("AI is crafting your recipes in parallel (usually <5 seconds)..."):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                ft_b_rec = executor.submit(generate_breakfast_recipe, bi)
+                ft_l_rec = executor.submit(generate_lunch_recipe, li)
+                ft_d_rec = executor.submit(generate_dinner_recipe, di)
+                ft_b_des = executor.submit(gen_desc, ib, pre_prompt_b, pre_breakfast)
+                ft_l_des = executor.submit(gen_desc, il, pre_prompt_l, pre_lunch)
+                ft_d_des = executor.submit(gen_desc, id_, pre_prompt_d, pre_dinner)
+                
+                b_rec = ft_b_rec.result(); l_rec = ft_l_rec.result(); d_rec = ft_d_rec.result()
+                db = ft_b_des.result(); dl = ft_l_des.result(); dd = ft_d_des.result()
+                
+        # Store for PDF and display
+        meals_data=[
+            {"title":"Breakfast","calories":cb_,"tgt":cb,"items":ib,"description":db,"recipe":b_rec,"color":PURPLE},
+            {"title":"Lunch",    "calories":cl_,"tgt":cl,"items":il,"description":dl,"recipe":l_rec,"color":CYAN},
+            {"title":"Dinner",   "calories":cd_,"tgt":cd,"items":id_,"description":dd,"recipe":d_rec,"color":PINK},
         ]
+        user_info={"name":st.session_state.last_name,"age":age,"gender":gender,"diet":diet,"bmr":bmr,"bmi":bmi,"bmi_cat":cat,"tdee":tgt}
+        
+        st.session_state.generated_data = {"meals": meals_data, "user_info": user_info}
+        st.rerun()
 
-        user_info = {
-            "name": name,
-            "age": age,
-            "gender": gender,
-            "diet": diet,
-            "bmr": round_bmr
-        }
+# --- BOTTOM SECTION: DISPLAY RESULTS ---
+if st.session_state.generated_data:
+    gdata = st.session_state.generated_data
+    
+    uname = st.session_state.last_name
+    st.markdown(f'<div style="text-align:center;margin-bottom:2rem"><div style="font-size:1.2rem;color:{TEXT_MUTED};font-weight:600">Hey {uname}, here are your results!</div><h2 style="color:{TEXT_MAIN};margin:0;font-size:2.5rem;font-weight:800">🍱 Your Complete Plan</h2></div>', unsafe_allow_html=True)
+    m1, m2, m3 = st.columns(3, gap="large")
+    for col, m in zip([m1, m2, m3], gdata["meals"]):
+        with col:
+            st.markdown(f"""
+            <div style="background:{SURFACE};border:1px solid {BORDER};border-radius:24px;padding:2rem;height:100%">
+              <div style="font-size:1.5rem;font-weight:700;color:{TEXT_MAIN};margin-bottom:10px">{m['title']}</div>
+              <div style="font-size:2.5rem;font-weight:800;color:{m['color']};line-height:1">{m['calories']} <span style="font-size:1rem;color:{TEXT_MUTED}">kcal</span></div>
+              <div style="margin:15px 0;">{"".join([f'<span style="display:inline-block;background:rgba(255,255,255,0.05);border:1px solid {BORDER};padding:6px 12px;border-radius:100px;margin:3px;font-size:0.8rem;color:{TEXT_MAIN}">🍽️ {i.replace("_", " ").title()}</span>' for i in m['items']])}</div>
+              <p style="font-size:0.9rem;color:{TEXT_MUTED};font-style:italic;margin-bottom:15px">"{m['description']}"</p>
+              <div style="font-size:0.85rem;color:{TEXT_MAIN};background:rgba(0,0,0,0.1);padding:15px;border-radius:12px;white-space:pre-wrap;border-left:3px solid {m['color']}">{m['recipe']}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        pdf_filename = "meal_plan.pdf"
-        create_meal_plan_pdf(meals_data, user_info, pdf_filename)
-
-        with open(pdf_filename, "rb") as f:
-            st.download_button(
-                label="📥 Download Meal Plan as PDF",
-                data=f,
-                file_name=pdf_filename,
-                mime="application/pdf"
-            )
-
-        st.success("✅ Recipes and meal descriptions generated successfully!")
+    st.markdown("<br>", unsafe_allow_html=True)
+    _, dl_c, _ = st.columns([1,2,1])
+    with dl_c:
+        create_meal_plan_pdf(gdata["meals"], gdata["user_info"], "meal_plan.pdf")
+        with open("meal_plan.pdf", "rb") as f:
+            st.download_button("📥 Download Master PDF", data=f, file_name=f"{st.session_state.last_name}_Diet.pdf", mime="application/pdf")
