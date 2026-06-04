@@ -59,7 +59,7 @@ GROQ_API_KEY = "gsk_YourAPIKeyGoesHere"
 ```bash
 streamlit run streamlit_meal_planner.py
 ```
-Open your browser to `http://localhost:8501`.
+Open your browser to `http://localhost:8501`, or Deployed site- `https://ai-meal-recipe-planner.streamlit.app/`
 
 ## 🧠 Project Architecture
 - **`streamlit_meal_planner.py`:** The main engine running the UI, CSS, Knapsack algorithm, multithreading, and Plotly graphics.
